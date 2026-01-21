@@ -30,21 +30,31 @@ from insv_dump.frames.frame_types import FrameType, OPTIONAL_PARSED_TYPES
 
 
 def scan_frame_types(filename: str, metadata: 'InsvMetadata') -> None:
-    """Scan and print frame types present in the metadata."""
-    from collections import Counter
+    """Scan and print frame types present in the metadata, with record counts."""
+    from collections import defaultdict
 
-    # Count frames per type
-    known_types: Counter[FrameType] = Counter()
-    unknown_types: Counter[int] = Counter()
+    # Parse all frames to get record counts
+    metadata.parse()
+
+    # Count records per frame type (sum across all frames of same type)
+    known_types: dict[FrameType, int] = defaultdict(int)
+    unknown_types: dict[int, int] = defaultdict(int)
 
     for frame in metadata.frames:
         frame_type = frame.header.frame_type
         if frame_type == FrameType.RAW:
             continue  # Skip synthetic RAW frames
-        if frame_type is not None:
-            known_types[frame_type] += 1
+
+        # Get record count if frame has records, otherwise count as 1
+        if hasattr(frame, 'records'):
+            count = len(frame.records)
         else:
-            unknown_types[frame.header.frame_type_code] += 1
+            count = 1
+
+        if frame_type is not None:
+            known_types[frame_type] += count
+        else:
+            unknown_types[frame.header.frame_type_code] += count
 
     # Print filename header
     print(f"{filename}:")
@@ -63,8 +73,8 @@ def scan_frame_types(filename: str, metadata: 'InsvMetadata') -> None:
             print(f"  {code:3d}: {'???':<24} {count:>12,}")
 
     # Summary
-    total_frames = sum(known_types.values()) + sum(unknown_types.values())
-    print(f"  Total: {total_frames:,} frames ({len(known_types)} known types, {len(unknown_types)} unknown)")
+    total_records = sum(known_types.values()) + sum(unknown_types.values())
+    print(f"  Total: {total_records:,} records ({len(known_types)} known types, {len(unknown_types)} unknown)")
     print()
 
 
@@ -103,7 +113,7 @@ Examples:
   %(prog)s --scan *.insv                   Scan multiple files
 
 Available frame types for --include:
-  MAGNETIC, EULER, GYRO_SECONDARY, SPEED, HEARTRATE, EXPOSURE_SECONDARY
+  MAGNETIC, EULER, GYRO_SECONDARY, SPEED, HEARTRATE, EXPOSURE_SECONDARY, POS
 """
     )
     parser.add_argument('input', nargs='*', help='Input INSV file(s)')

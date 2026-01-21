@@ -4,3 +4,8 @@ CLAUDE.md
 *.pyc
 __pycache__/
 *.json
+*.insv
+*.prx
+*.dng
+*.lrv
+FLIGHT_TEST_PLAN.md

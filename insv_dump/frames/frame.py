@@ -39,6 +39,7 @@ class Frame:
         from .gps_frame import GpsFrame
         from .exposure_frame import ExposureFrame
         from .timelapse_frame import TimelapseFrame
+        from .pos_frame import PosFrame
 
         # Create appropriate frame subclass based on type
         if header.frame_type == FrameType.INDEX:
@@ -53,6 +54,8 @@ class Frame:
             return ExposureFrame(header, payload)
         elif header.frame_type == FrameType.TIMELAPSE:
             return TimelapseFrame(header, payload)
+        elif header.frame_type == FrameType.POS:
+            return PosFrame(header, payload)
         else:
             return Frame(header, payload)
 

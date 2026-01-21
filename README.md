@@ -78,14 +78,15 @@ python insv_dump.py --list-types
 | 7 | GPS | GPS location data |
 
 ### Optional Frames (use `--include`)
-| Code | Name |
-|------|------|
-| 12 | EXPOSURE_SECONDARY |
-| 13 | MAGNETIC |
-| 14 | EULER |
-| 15 | GYRO_SECONDARY |
-| 16 | SPEED |
-| 19 | HEARTRATE |
+| Code | Name | Description |
+|------|------|-------------|
+| 12 | EXPOSURE_SECONDARY | Secondary exposure data |
+| 13 | MAGNETIC | Magnetometer data |
+| 14 | EULER | Orientation quaternions |
+| 15 | GYRO_SECONDARY | Secondary gyroscope data |
+| 16 | SPEED | Speed data |
+| 19 | HEARTRATE | Heart rate monitor data |
+| 23 | POS | Drone position/telemetry (see below) |
 
 ## Output Format
 
@@ -130,6 +131,78 @@ The JSON output structure matches the original Java tool:
 }
 ```
 
+## Drone Telemetry (POS Frame)
+
+Videos recorded on drones (e.g., Antigravity A1) include a POS frame with flight telemetry data. Use `--include POS` to parse this data.
+
+```bash
+python insv_dump.py drone_video.insv --include POS
+```
+
+### POS Record Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | int | Timestamp in milliseconds |
+| `xPos` | float | Local X position (units unclear) |
+| `yPos` | float | Local Y position (units unclear) |
+| `zPos` | float | Local Z position (units unclear) |
+| `velocityH` | float | Horizontal velocity component (m/s) |
+| `velocityV` | float | Vertical velocity / climb rate (m/s) |
+| `speed` | float | Total speed magnitude (m/s) |
+| `agl` | float | Above Ground Level in meters (omitted if N/A) |
+
+**Note:** The `xPos`/`yPos`/`zPos` fields are local position coordinates whose exact meaning is not fully understood. They do NOT represent distance from home. To calculate total distance traveled, integrate the `speed` field over time.
+
+### Example Output
+
+```json
+{
+  "header": {"frameType": "POS", ...},
+  "parsed": true,
+  "records": [
+    {
+      "timestamp": 918895,
+      "xPos": -0.0287,
+      "yPos": -0.0193,
+      "zPos": 1.8612,
+      "velocityH": 0.0095,
+      "velocityV": -0.0249,
+      "speed": 0.0267,
+      "agl": 4.65
+    },
+    ...
+  ]
+}
+```
+
+### Drone-Specific Frame Types
+
+Drone recordings also include additional frame types that are not yet fully decoded:
+
+| Code | Status | Notes |
+|------|--------|-------|
+| 32 | Unknown | Large frame, likely contains extended telemetry |
+| 33 | Unknown | 33-byte records at 50Hz, possibly accelerometer data |
+| 37 | Unknown | 36-byte records at 50Hz, velocity/orientation data |
+| 38 | Unknown | Small frame, possibly configuration or summary |
+
+The POS frame provides the most useful telemetry (position, velocity, AGL) for most applications.
+
+### Reverse Engineering Status
+
+**Confirmed fields:**
+- `agl` (Float[9]): Above Ground Level in meters, -1.0 = N/A. Verified against video overlay.
+- `velocityV` (Float[7]): Vertical velocity component in m/s. Correlates with overlay "D" (depth/vertical delta).
+- `velocityH` (Float[6]): Horizontal velocity component in m/s.
+
+**Partially understood:**
+- `xPos`, `yPos`, `zPos` (Float[0-2]): Local position coordinates. NOT distance from home. Units and reference frame unclear. Values fluctuate rather than accumulate.
+- Float[3-5]: Large values that change over time, possibly world coordinates or sensor data.
+- Float[8]: Unknown, small values.
+
+**Future work:** Controlled test flights (see [FLIGHT_TEST_PLAN.md](FLIGHT_TEST_PLAN.md)) would help decode the remaining fields.
+
 ## Notes
 
 - **GYRO frame parsing**: The GYRO frame can only be parsed if the INFO frame contains a non-empty `Gyro` field (used to determine record size). This is the same behavior as the original Java tool.
@@ -158,13 +231,15 @@ insv_dump/
     │   ├── gyro_frame.py
     │   ├── gps_frame.py
     │   ├── exposure_frame.py
-    │   └── timelapse_frame.py
+    │   ├── timelapse_frame.py
+    │   └── pos_frame.py            # Drone position/telemetry
     ├── records/                    # Record type implementations
     │   ├── base.py
     │   ├── gyro.py
     │   ├── gps.py
     │   ├── exposure.py
-    │   └── timelapse.py
+    │   ├── timelapse.py
+    │   └── pos.py                  # Drone position records
     └── proto/
         └── extra_metadata_pb2.py   # Compiled protobuf
 ```

@@ -69,4 +69,5 @@ OPTIONAL_PARSED_TYPES = {
     FrameType.SPEED,
     FrameType.HEARTRATE,
     FrameType.EXPOSURE_SECONDARY,
+    FrameType.POS,
 }
