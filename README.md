@@ -47,8 +47,8 @@ python insv_dump.py video.insv --include MAGNETIC --include EULER
 # Scan a file to see what frame types it contains (no dump)
 python insv_dump.py video.insv --scan
 
-# Scan multiple files using a glob pattern (quote the glob!)
-python insv_dump.py --scan "*.insv"
+# Scan multiple files
+python insv_dump.py --scan *.insv
 
 # List all known frame types
 python insv_dump.py --list-types
@@ -58,7 +58,7 @@ python insv_dump.py --list-types
 
 | Option | Description |
 |--------|-------------|
-| `input` | Input INSV file (supports glob patterns with `--scan`) |
+| `input` | Input INSV file(s) (multiple files supported with `--scan`) |
 | `-o, --output` | Output JSON file (default: `<input>.meta.json`) |
 | `--frame-type CODE` | Dump only the specified frame type by numeric code |
 | `--include TYPES` | Include additional frame types for parsing (comma-separated) |

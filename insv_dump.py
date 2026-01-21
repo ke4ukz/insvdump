@@ -11,11 +11,10 @@ Usage:
     python insv_dump.py video.insv --frame-type 3
     python insv_dump.py video.insv --include MAGNETIC,EULER
     python insv_dump.py video.insv --scan
-    python insv_dump.py --scan "*.insv"
+    python insv_dump.py --scan *.insv
 """
 
 import argparse
-import glob
 import os
 import sys
 from typing import List, Optional, Set
@@ -69,16 +68,6 @@ def scan_frame_types(filename: str, metadata: 'InsvMetadata') -> None:
     print()
 
 
-def expand_input_files(pattern: str) -> List[str]:
-    """Expand a glob pattern to a list of files."""
-    # Check if it contains glob characters
-    if any(c in pattern for c in '*?['):
-        files = sorted(glob.glob(pattern))
-        return [f for f in files if os.path.isfile(f)]
-    else:
-        return [pattern]
-
-
 def parse_include_types(include_args: list) -> Set[FrameType]:
     """Parse --include arguments into a set of FrameTypes."""
     types = set()
@@ -111,13 +100,13 @@ Examples:
   %(prog)s video.insv --include MAGNETIC   Parse and include MAGNETIC frame
   %(prog)s video.insv --include MAGNETIC,EULER
   %(prog)s video.insv --scan               Show frame types in file
-  %(prog)s --scan "*.insv"                 Scan multiple files (quote the glob!)
+  %(prog)s --scan *.insv                   Scan multiple files
 
 Available frame types for --include:
   MAGNETIC, EULER, GYRO_SECONDARY, SPEED, HEARTRATE, EXPOSURE_SECONDARY
 """
     )
-    parser.add_argument('input', nargs='?', help='Input INSV file (supports glob patterns with --scan)')
+    parser.add_argument('input', nargs='*', help='Input INSV file(s)')
     parser.add_argument('-o', '--output', help='Output JSON file (default: <input>.meta.json)')
     parser.add_argument('--frame-type', type=int, metavar='CODE',
                         help='Dump only the specified frame type (by numeric code)')
@@ -141,15 +130,10 @@ Available frame types for --include:
         return 0
 
     # Check input file is provided
-    if args.input is None:
+    if not args.input:
         parser.error("the following arguments are required: input")
 
-    # Expand glob patterns
-    input_files = expand_input_files(args.input)
-
-    if not input_files:
-        print(f"Error: No files found matching: {args.input}", file=sys.stderr)
-        return 1
+    input_files = args.input
 
     # Handle --scan (supports multiple files)
     if args.scan:
