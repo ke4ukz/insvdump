@@ -32,7 +32,7 @@ def scan_frame_types(metadata: 'InsvMetadata') -> int:
     """Scan and print frame types present in the metadata."""
     from collections import Counter
 
-    # Count frame types
+    # Count frames per type
     known_types: Counter[FrameType] = Counter()
     unknown_types: Counter[int] = Counter()
 
@@ -50,20 +50,18 @@ def scan_frame_types(metadata: 'InsvMetadata') -> int:
         print("Known frame types:")
         for frame_type in sorted(known_types.keys(), key=lambda x: x.value):
             count = known_types[frame_type]
-            count_str = f" (x{count})" if count > 1 else ""
-            print(f"  {frame_type.value:3d}: {frame_type.name}{count_str}")
+            print(f"  {frame_type.value:3d}: {frame_type.name:<24} {count:>12,}")
 
     # Print unknown types
     if unknown_types:
         print("Unknown frame types:")
         for code in sorted(unknown_types.keys()):
             count = unknown_types[code]
-            count_str = f" (x{count})" if count > 1 else ""
-            print(f"  {code:3d}: ???{count_str}")
+            print(f"  {code:3d}: {'???':<24} {count:>12,}")
 
     # Summary
-    total = sum(known_types.values()) + sum(unknown_types.values())
-    print(f"\nTotal: {total} frames ({len(known_types)} known types, {len(unknown_types)} unknown types)")
+    total_frames = sum(known_types.values()) + sum(unknown_types.values())
+    print(f"\nTotal: {total_frames:,} frames ({len(known_types)} known types, {len(unknown_types)} unknown types)")
 
     return 0
 
