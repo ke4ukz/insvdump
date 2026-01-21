@@ -10,6 +10,7 @@ Usage:
     python insv_dump.py video.insv -o output.json
     python insv_dump.py video.insv --frame-type 3
     python insv_dump.py video.insv --include MAGNETIC,EULER
+    python insv_dump.py video.insv --scan
 """
 
 import argparse
@@ -25,6 +26,46 @@ if script_dir not in sys.path:
 from insv_dump.metadata import InsvMetadata
 from insv_dump.dump import dump_metadata, dump_frame
 from insv_dump.frames.frame_types import FrameType, OPTIONAL_PARSED_TYPES
+
+
+def scan_frame_types(metadata: 'InsvMetadata') -> int:
+    """Scan and print frame types present in the metadata."""
+    from collections import Counter
+
+    # Count frame types
+    known_types: Counter[FrameType] = Counter()
+    unknown_types: Counter[int] = Counter()
+
+    for frame in metadata.frames:
+        frame_type = frame.header.frame_type
+        if frame_type == FrameType.RAW:
+            continue  # Skip synthetic RAW frames
+        if frame_type is not None:
+            known_types[frame_type] += 1
+        else:
+            unknown_types[frame.header.frame_type_code] += 1
+
+    # Print known types
+    if known_types:
+        print("Known frame types:")
+        for frame_type in sorted(known_types.keys(), key=lambda x: x.value):
+            count = known_types[frame_type]
+            count_str = f" (x{count})" if count > 1 else ""
+            print(f"  {frame_type.value:3d}: {frame_type.name}{count_str}")
+
+    # Print unknown types
+    if unknown_types:
+        print("Unknown frame types:")
+        for code in sorted(unknown_types.keys()):
+            count = unknown_types[code]
+            count_str = f" (x{count})" if count > 1 else ""
+            print(f"  {code:3d}: ???{count_str}")
+
+    # Summary
+    total = sum(known_types.values()) + sum(unknown_types.values())
+    print(f"\nTotal: {total} frames ({len(known_types)} known types, {len(unknown_types)} unknown types)")
+
+    return 0
 
 
 def parse_include_types(include_args: list) -> Set[FrameType]:
@@ -58,6 +99,7 @@ Examples:
   %(prog)s video.insv --frame-type 3       Dump only GYRO frame
   %(prog)s video.insv --include MAGNETIC   Parse and include MAGNETIC frame
   %(prog)s video.insv --include MAGNETIC,EULER
+  %(prog)s video.insv --scan                   Show frame types in file
 
 Available frame types for --include:
   MAGNETIC, EULER, GYRO_SECONDARY, SPEED, HEARTRATE, EXPOSURE_SECONDARY
@@ -71,6 +113,8 @@ Available frame types for --include:
                         help='Include additional frame types for parsing (comma-separated)')
     parser.add_argument('--list-types', action='store_true',
                         help='List all known frame types and exit')
+    parser.add_argument('--scan', action='store_true',
+                        help='Scan file and show frame types present (no dump)')
 
     args = parser.parse_args()
 
@@ -107,6 +151,10 @@ Available frame types for --include:
     if metadata is None:
         print(f"Error: No valid INSV metadata found in {args.input}", file=sys.stderr)
         return 1
+
+    # Handle --scan
+    if args.scan:
+        return scan_frame_types(metadata)
 
     # Parse metadata
     try:
