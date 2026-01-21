@@ -11,12 +11,14 @@ Usage:
     python insv_dump.py video.insv --frame-type 3
     python insv_dump.py video.insv --include MAGNETIC,EULER
     python insv_dump.py video.insv --scan
+    python insv_dump.py --scan "*.insv"
 """
 
 import argparse
+import glob
 import os
 import sys
-from typing import Optional, Set
+from typing import List, Optional, Set
 
 # Add the package directory to the path for standalone execution
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -28,7 +30,7 @@ from insv_dump.dump import dump_metadata, dump_frame
 from insv_dump.frames.frame_types import FrameType, OPTIONAL_PARSED_TYPES
 
 
-def scan_frame_types(metadata: 'InsvMetadata') -> int:
+def scan_frame_types(filename: str, metadata: 'InsvMetadata') -> None:
     """Scan and print frame types present in the metadata."""
     from collections import Counter
 
@@ -45,25 +47,36 @@ def scan_frame_types(metadata: 'InsvMetadata') -> int:
         else:
             unknown_types[frame.header.frame_type_code] += 1
 
+    # Print filename header
+    print(f"{filename}:")
+
     # Print known types
     if known_types:
-        print("Known frame types:")
         for frame_type in sorted(known_types.keys(), key=lambda x: x.value):
             count = known_types[frame_type]
             print(f"  {frame_type.value:3d}: {frame_type.name:<24} {count:>12,}")
 
     # Print unknown types
     if unknown_types:
-        print("Unknown frame types:")
+        print("  Unknown:")
         for code in sorted(unknown_types.keys()):
             count = unknown_types[code]
             print(f"  {code:3d}: {'???':<24} {count:>12,}")
 
     # Summary
     total_frames = sum(known_types.values()) + sum(unknown_types.values())
-    print(f"\nTotal: {total_frames:,} frames ({len(known_types)} known types, {len(unknown_types)} unknown types)")
+    print(f"  Total: {total_frames:,} frames ({len(known_types)} known types, {len(unknown_types)} unknown)")
+    print()
 
-    return 0
+
+def expand_input_files(pattern: str) -> List[str]:
+    """Expand a glob pattern to a list of files."""
+    # Check if it contains glob characters
+    if any(c in pattern for c in '*?['):
+        files = sorted(glob.glob(pattern))
+        return [f for f in files if os.path.isfile(f)]
+    else:
+        return [pattern]
 
 
 def parse_include_types(include_args: list) -> Set[FrameType]:
@@ -97,13 +110,14 @@ Examples:
   %(prog)s video.insv --frame-type 3       Dump only GYRO frame
   %(prog)s video.insv --include MAGNETIC   Parse and include MAGNETIC frame
   %(prog)s video.insv --include MAGNETIC,EULER
-  %(prog)s video.insv --scan                   Show frame types in file
+  %(prog)s video.insv --scan               Show frame types in file
+  %(prog)s --scan "*.insv"                 Scan multiple files (quote the glob!)
 
 Available frame types for --include:
   MAGNETIC, EULER, GYRO_SECONDARY, SPEED, HEARTRATE, EXPOSURE_SECONDARY
 """
     )
-    parser.add_argument('input', nargs='?', help='Input INSV file')
+    parser.add_argument('input', nargs='?', help='Input INSV file (supports glob patterns with --scan)')
     parser.add_argument('-o', '--output', help='Output JSON file (default: <input>.meta.json)')
     parser.add_argument('--frame-type', type=int, metavar='CODE',
                         help='Dump only the specified frame type (by numeric code)')
@@ -130,9 +144,40 @@ Available frame types for --include:
     if args.input is None:
         parser.error("the following arguments are required: input")
 
+    # Expand glob patterns
+    input_files = expand_input_files(args.input)
+
+    if not input_files:
+        print(f"Error: No files found matching: {args.input}", file=sys.stderr)
+        return 1
+
+    # Handle --scan (supports multiple files)
+    if args.scan:
+        errors = 0
+        for input_file in input_files:
+            try:
+                with open(input_file, 'rb') as f:
+                    metadata = InsvMetadata.read(f)
+                if metadata is None:
+                    print(f"{input_file}: No valid INSV metadata found", file=sys.stderr)
+                    errors += 1
+                else:
+                    scan_frame_types(input_file, metadata)
+            except Exception as e:
+                print(f"{input_file}: Error - {e}", file=sys.stderr)
+                errors += 1
+        return 1 if errors else 0
+
+    # For non-scan operations, only single file is supported
+    if len(input_files) > 1:
+        print("Error: Multiple files only supported with --scan", file=sys.stderr)
+        return 1
+
+    input_file = input_files[0]
+
     # Check input file exists
-    if not os.path.isfile(args.input):
-        print(f"Error: File not found: {args.input}", file=sys.stderr)
+    if not os.path.isfile(input_file):
+        print(f"Error: File not found: {input_file}", file=sys.stderr)
         return 1
 
     # Parse include types
@@ -140,19 +185,15 @@ Available frame types for --include:
 
     # Read metadata
     try:
-        with open(args.input, 'rb') as f:
+        with open(input_file, 'rb') as f:
             metadata = InsvMetadata.read(f)
     except Exception as e:
         print(f"Error reading file: {e}", file=sys.stderr)
         return 1
 
     if metadata is None:
-        print(f"Error: No valid INSV metadata found in {args.input}", file=sys.stderr)
+        print(f"Error: No valid INSV metadata found in {input_file}", file=sys.stderr)
         return 1
-
-    # Handle --scan
-    if args.scan:
-        return scan_frame_types(metadata)
 
     # Parse metadata
     try:
@@ -177,7 +218,7 @@ Available frame types for --include:
     if args.output:
         output_file = args.output
     else:
-        output_file = os.path.basename(args.input) + default_suffix
+        output_file = os.path.basename(input_file) + default_suffix
 
     # Check if output file exists
     if os.path.exists(output_file):
